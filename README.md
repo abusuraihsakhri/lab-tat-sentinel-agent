@@ -37,36 +37,52 @@
 
 ## 💻 CLI Quickstart & Usage
 
-### 1. Guided Interactive Mode
+### 1. Single Task Evaluation (Audit)
 ```bash
-python cli.py
+python cli.py audit --task-id TASK-001 --target SPECIMEN-01 --primary 28.5 --secondary 14.2 --critical --status DISCORDANT
 ```
 
-### 2. Direct Parameterized Evaluation
+### 2. Batch Process CSV Records
 ```bash
-python cli.py --task-id <value> --target <value> --primary <value> --secondary <value>
+python cli.py batch -i sample.csv -o results.csv
 ```
 
-### Parameter Reference
-- `--task-id`: Specifies input measurement or parameter value.
-- `--target`: Specifies input measurement or parameter value.
-- `--primary`: Specifies input measurement or parameter value.
-- `--secondary`: Specifies input measurement or parameter value.
-- `--critical`: Specifies input measurement or parameter value.
-- `--status`: Specifies input measurement or parameter value.
-- `--input`: Specifies input measurement or parameter value.
-- `--output`: Specifies input measurement or parameter value.
+### 3. Supervisor Chat Query
+```bash
+python cli.py chat "What is the current system status?"
+```
 
-### Input Data Schema
+### 4. Verify Audit Trail Integrity
+```bash
+python cli.py verify-audit
+```
+
+### 5. Launch FastAPI REST Server
+```bash
+python cli.py serve --host 127.0.0.1 --port 8000
+```
+
+### Audit Command Parameters
+
+| Parameter | Type | Default | Description |
+|:----------|:-----|:--------|:------------|
+| `--task-id` | str | `TASK-2026-001` | Unique task / case identifier |
+| `--target` | str | `KEY-TARGET-01` | Target specimen or entity identifier |
+| `--primary` | float | `28.5` | Primary metric measurement |
+| `--secondary` | float | `14.2` | Secondary metric measurement |
+| `--critical` | flag | `False` | Trigger emergency escalation |
+| `--status` | str | `DISCORDANT` | Status descriptor (e.g., NOMINAL, DISCORDANT, SUSPICIOUS) |
+
+### Batch CSV Input Schema
 
 | Field | Description | Requirement |
 |:------|:------------|:------------|
-| `case_id` | Parameter / observation metric | Required |
-| `patient_synthetic_id` | Parameter / observation metric | Required |
-| `metric_primary` | Parameter / observation metric | Required |
-| `metric_secondary` | Parameter / observation metric | Required |
-| `is_stat` | Parameter / observation metric | Required |
-| `status_flag` | Parameter / observation metric | Required |
+| `task_id` | Unique task identifier | Optional (defaults to row index) |
+| `target_identifier` | Target specimen/entity | Optional |
+| `primary_metric` | Primary measurement value | Optional (default: 15.0) |
+| `secondary_metric` | Secondary measurement value | Optional (default: 5.0) |
+| `is_critical_flag` | Emergency escalation flag | Optional (default: false) |
+| `status_descriptor` | Status code or phenotype | Optional (default: NOMINAL) |
 
 ---
 
@@ -91,8 +107,10 @@ pytest -v
 Execute high-throughput batch simulation benchmarks:
 
 ```bash
-python simulator.py --tasks 1000 --concurrency 8
+python simulator.py --tasks 100 --concurrency 1
 ```
+
+The simulator generates random task payloads across all urgency tiers, injects adversarial PHI test cases, and reports HMAC-SHA256 audit integrity verification.
 
 ---
 

@@ -3,410 +3,150 @@ Enrichment Feature Implementation for lab-tat-sentinel-agent.
 Generated based on domain-specific requirements in specifications.
 """
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Type
 import datetime
-import math
 import json
+
+# =============================================================================
+# BASE CLASSES FOR ENGINES (DRY refactor)
+# =============================================================================
+
+@dataclass
+class EnrichmentResult:
+    """Shared result dataclass for all enrichment engines."""
+    feature_name: str
+    status: str = "OPTIMAL"
+    score: float = 0.0
+    metrics: Dict[str, Any] = field(default_factory=dict)
+    alerts: List[str] = field(default_factory=list)
+    recommendations: List[str] = field(default_factory=list)
+    timestamp: str = field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc).isoformat())
+
+
+class ThresholdEngine:
+    """Base engine implementing threshold-based evaluation with shared logic."""
+
+    # Subclasses must set these
+    feature_name: str = "Unnamed Engine"
+
+    def __init__(self, threshold: float = 1.0, config: Optional[Dict[str, Any]] = None):
+        self.threshold = threshold
+        self.config = config or {}
+        self.history: List[EnrichmentResult] = []
+
+    def evaluate(self, primary_value: float, secondary_value: float = 0.0, **kwargs) -> EnrichmentResult:
+        alerts: List[str] = []
+        recs: List[str] = []
+        status = "OPTIMAL"
+        score = round(float(primary_value), 3)
+
+        if primary_value > self.threshold * 2:
+            status = "CRITICAL_ALERT"
+            alerts.append(
+                f"{self.feature_name}: Primary value {primary_value:.2f} breached critical threshold "
+                f"({self.threshold * 2:.2f})"
+            )
+            recs.append("Initiate immediate protocol review and escalate to attending lead.")
+        elif primary_value > self.threshold:
+            status = "WARNING"
+            alerts.append(
+                f"{self.feature_name}: Value {primary_value:.2f} exceeds baseline threshold "
+                f"({self.threshold:.2f})"
+            )
+            recs.append("Increase monitoring frequency and perform secondary verification.")
+        else:
+            recs.append("Parameters nominal under standard operating bounds.")
+
+        res = EnrichmentResult(
+            feature_name=self.feature_name,
+            status=status,
+            score=score,
+            metrics={"primary": primary_value, "secondary": secondary_value, **kwargs},
+            alerts=alerts,
+            recommendations=recs,
+        )
+        self.history.append(res)
+        return res
+
 
 # =============================================================================
 # 1. REAL-TIME LEVEY-JENNINGS TAT TRENDING DASHBOARD
 # =============================================================================
-@dataclass
-class RealtimeLeveyjenningsTatTrendingDashboardEngineResult:
-    feature_name: str = "Real-Time Levey-Jennings TAT Trending Dashboard"
-    status: str = "OPTIMAL"
-    score: float = 0.0
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    alerts: List[str] = field(default_factory=list)
-    recommendations: List[str] = field(default_factory=list)
-    timestamp: str = field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc).isoformat())
+class RealtimeLeveyjenningsTatTrendingDashboardEngine(ThresholdEngine):
+    """Live visualization of turnaround time trends per department with sigma-level breach highlighting."""
+    feature_name = "Real-Time Levey-Jennings TAT Trending Dashboard"
 
-class RealtimeLeveyjenningsTatTrendingDashboardEngine:
-    """
-    Real-Time Levey-Jennings TAT Trending Dashboard: **Goal:** Live visualization of turnaround time trends per department with sigma-level breach highlighting.
-    """
-    def __init__(self, threshold: float = 1.0, config: Optional[Dict[str, Any]] = None):
-        self.threshold = threshold
-        self.config = config or {}
-        self.history: List[RealtimeLeveyjenningsTatTrendingDashboardEngineResult] = []
+RealtimeLeveyjenningsTatTrendingDashboardEngineResult = EnrichmentResult
 
-    def evaluate(self, primary_value: float, secondary_value: float = 0.0, **kwargs) -> RealtimeLeveyjenningsTatTrendingDashboardEngineResult:
-        alerts = []
-        recs = []
-        status = "OPTIMAL"
-        score = round(float(primary_value), 3)
-
-        if primary_value > self.threshold * 2:
-            status = "CRITICAL_ALERT"
-            alerts.append(f"Real-Time Levey-Jennings TAT Trending Dashboard: Primary value {primary_value:.2f} breached critical threshold ({self.threshold * 2:.2f})")
-            recs.append("Initiate immediate protocol review and escalate to attending lead.")
-        elif primary_value > self.threshold:
-            status = "WARNING"
-            alerts.append(f"Real-Time Levey-Jennings TAT Trending Dashboard: Value {primary_value:.2f} exceeds baseline threshold ({self.threshold:.2f})")
-            recs.append("Increase monitoring frequency and perform secondary verification.")
-        else:
-            recs.append("Parameters nominal under standard operating bounds.")
-
-        res = RealtimeLeveyjenningsTatTrendingDashboardEngineResult(
-            feature_name="Real-Time Levey-Jennings TAT Trending Dashboard",
-            status=status,
-            score=score,
-            metrics={"primary": primary_value, "secondary": secondary_value, **kwargs},
-            alerts=alerts,
-            recommendations=recs
-        )
-        self.history.append(res)
-        return res
 
 # =============================================================================
-# 2. MAINTAIN A ROLLING 30-DAY MEAN AND SD PER DEPARTMENT IN-MEMORY USING COLLECTIONS.DEQUE(MAXLEN=1000)
+# 2. MAINTAIN A ROLLING 30-DAY MEAN AND SD PER DEPARTMENT
 # =============================================================================
-@dataclass
-class MaintainARolling30dayMeanAndSdPerDepartmentInmemoryUsingCollectionsdequemaxlen1000EngineResult:
-    feature_name: str = "Maintain a rolling 30-day mean and SD per department in-memory using collections.deque(maxlen=1000)"
-    status: str = "OPTIMAL"
-    score: float = 0.0
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    alerts: List[str] = field(default_factory=list)
-    recommendations: List[str] = field(default_factory=list)
-    timestamp: str = field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc).isoformat())
+class MaintainARolling30dayMeanAndSdPerDepartmentInmemoryUsingCollectionsdequemaxlen1000Engine(ThresholdEngine):
+    """Maintain a rolling 30-day mean and SD per department in-memory using collections.deque(maxlen=1000)."""
+    feature_name = "Maintain a rolling 30-day mean and SD per department in-memory using collections.deque(maxlen=1000)"
 
-class MaintainARolling30dayMeanAndSdPerDepartmentInmemoryUsingCollectionsdequemaxlen1000Engine:
-    """
-    Maintain a rolling 30-day mean and SD per department in-memory using collections.deque(maxlen=1000): ---
-    """
-    def __init__(self, threshold: float = 1.0, config: Optional[Dict[str, Any]] = None):
-        self.threshold = threshold
-        self.config = config or {}
-        self.history: List[MaintainARolling30dayMeanAndSdPerDepartmentInmemoryUsingCollectionsdequemaxlen1000EngineResult] = []
+MaintainARolling30dayMeanAndSdPerDepartmentInmemoryUsingCollectionsdequemaxlen1000EngineResult = EnrichmentResult
 
-    def evaluate(self, primary_value: float, secondary_value: float = 0.0, **kwargs) -> MaintainARolling30dayMeanAndSdPerDepartmentInmemoryUsingCollectionsdequemaxlen1000EngineResult:
-        alerts = []
-        recs = []
-        status = "OPTIMAL"
-        score = round(float(primary_value), 3)
-
-        if primary_value > self.threshold * 2:
-            status = "CRITICAL_ALERT"
-            alerts.append(f"Maintain a rolling 30-day mean and SD per department in-memory using collections.deque(maxlen=1000): Primary value {primary_value:.2f} breached critical threshold ({self.threshold * 2:.2f})")
-            recs.append("Initiate immediate protocol review and escalate to attending lead.")
-        elif primary_value > self.threshold:
-            status = "WARNING"
-            alerts.append(f"Maintain a rolling 30-day mean and SD per department in-memory using collections.deque(maxlen=1000): Value {primary_value:.2f} exceeds baseline threshold ({self.threshold:.2f})")
-            recs.append("Increase monitoring frequency and perform secondary verification.")
-        else:
-            recs.append("Parameters nominal under standard operating bounds.")
-
-        res = MaintainARolling30dayMeanAndSdPerDepartmentInmemoryUsingCollectionsdequemaxlen1000EngineResult(
-            feature_name="Maintain a rolling 30-day mean and SD per department in-memory using collections.deque(maxlen=1000)",
-            status=status,
-            score=score,
-            metrics={"primary": primary_value, "secondary": secondary_value, **kwargs},
-            alerts=alerts,
-            recommendations=recs
-        )
-        self.history.append(res)
-        return res
 
 # =============================================================================
 # 3. PHLEBOTOMY-TO-RESULT CHAIN-OF-CUSTODY BARCODE TRACKING
 # =============================================================================
-@dataclass
-class PhlebotomytoresultChainofcustodyBarcodeTrackingEngineResult:
-    feature_name: str = "Phlebotomy-to-Result Chain-of-Custody Barcode Tracking"
-    status: str = "OPTIMAL"
-    score: float = 0.0
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    alerts: List[str] = field(default_factory=list)
-    recommendations: List[str] = field(default_factory=list)
-    timestamp: str = field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc).isoformat())
+class PhlebotomytoresultChainofcustodyBarcodeTrackingEngine(ThresholdEngine):
+    """Track every handoff event from draw to result, identify the slowest segment."""
+    feature_name = "Phlebotomy-to-Result Chain-of-Custody Barcode Tracking"
 
-class PhlebotomytoresultChainofcustodyBarcodeTrackingEngine:
-    """
-    Phlebotomy-to-Result Chain-of-Custody Barcode Tracking: **Goal:** Track every handoff event from draw to result, identify the slowest segment.
-    """
-    def __init__(self, threshold: float = 1.0, config: Optional[Dict[str, Any]] = None):
-        self.threshold = threshold
-        self.config = config or {}
-        self.history: List[PhlebotomytoresultChainofcustodyBarcodeTrackingEngineResult] = []
+PhlebotomytoresultChainofcustodyBarcodeTrackingEngineResult = EnrichmentResult
 
-    def evaluate(self, primary_value: float, secondary_value: float = 0.0, **kwargs) -> PhlebotomytoresultChainofcustodyBarcodeTrackingEngineResult:
-        alerts = []
-        recs = []
-        status = "OPTIMAL"
-        score = round(float(primary_value), 3)
-
-        if primary_value > self.threshold * 2:
-            status = "CRITICAL_ALERT"
-            alerts.append(f"Phlebotomy-to-Result Chain-of-Custody Barcode Tracking: Primary value {primary_value:.2f} breached critical threshold ({self.threshold * 2:.2f})")
-            recs.append("Initiate immediate protocol review and escalate to attending lead.")
-        elif primary_value > self.threshold:
-            status = "WARNING"
-            alerts.append(f"Phlebotomy-to-Result Chain-of-Custody Barcode Tracking: Value {primary_value:.2f} exceeds baseline threshold ({self.threshold:.2f})")
-            recs.append("Increase monitoring frequency and perform secondary verification.")
-        else:
-            recs.append("Parameters nominal under standard operating bounds.")
-
-        res = PhlebotomytoresultChainofcustodyBarcodeTrackingEngineResult(
-            feature_name="Phlebotomy-to-Result Chain-of-Custody Barcode Tracking",
-            status=status,
-            score=score,
-            metrics={"primary": primary_value, "secondary": secondary_value, **kwargs},
-            alerts=alerts,
-            recommendations=recs
-        )
-        self.history.append(res)
-        return res
 
 # =============================================================================
 # 4. AUTO-FLAG THE SEGMENT WITH THE LONGEST DURATION AS THE BOTTLENECK
 # =============================================================================
-@dataclass
-class AutoflagTheSegmentWithTheLongestDurationAsTheBottleneckEngineResult:
-    feature_name: str = "Auto-flag the segment with the longest duration as the bottleneck"
-    status: str = "OPTIMAL"
-    score: float = 0.0
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    alerts: List[str] = field(default_factory=list)
-    recommendations: List[str] = field(default_factory=list)
-    timestamp: str = field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc).isoformat())
+class AutoflagTheSegmentWithTheLongestDurationAsTheBottleneckEngine(ThresholdEngine):
+    """Auto-flag the segment with the longest duration as the bottleneck."""
+    feature_name = "Auto-flag the segment with the longest duration as the bottleneck"
 
-class AutoflagTheSegmentWithTheLongestDurationAsTheBottleneckEngine:
-    """
-    Auto-flag the segment with the longest duration as the bottleneck: ---
-    """
-    def __init__(self, threshold: float = 1.0, config: Optional[Dict[str, Any]] = None):
-        self.threshold = threshold
-        self.config = config or {}
-        self.history: List[AutoflagTheSegmentWithTheLongestDurationAsTheBottleneckEngineResult] = []
+AutoflagTheSegmentWithTheLongestDurationAsTheBottleneckEngineResult = EnrichmentResult
 
-    def evaluate(self, primary_value: float, secondary_value: float = 0.0, **kwargs) -> AutoflagTheSegmentWithTheLongestDurationAsTheBottleneckEngineResult:
-        alerts = []
-        recs = []
-        status = "OPTIMAL"
-        score = round(float(primary_value), 3)
-
-        if primary_value > self.threshold * 2:
-            status = "CRITICAL_ALERT"
-            alerts.append(f"Auto-flag the segment with the longest duration as the bottleneck: Primary value {primary_value:.2f} breached critical threshold ({self.threshold * 2:.2f})")
-            recs.append("Initiate immediate protocol review and escalate to attending lead.")
-        elif primary_value > self.threshold:
-            status = "WARNING"
-            alerts.append(f"Auto-flag the segment with the longest duration as the bottleneck: Value {primary_value:.2f} exceeds baseline threshold ({self.threshold:.2f})")
-            recs.append("Increase monitoring frequency and perform secondary verification.")
-        else:
-            recs.append("Parameters nominal under standard operating bounds.")
-
-        res = AutoflagTheSegmentWithTheLongestDurationAsTheBottleneckEngineResult(
-            feature_name="Auto-flag the segment with the longest duration as the bottleneck",
-            status=status,
-            score=score,
-            metrics={"primary": primary_value, "secondary": secondary_value, **kwargs},
-            alerts=alerts,
-            recommendations=recs
-        )
-        self.history.append(res)
-        return res
 
 # =============================================================================
 # 5. CROSS-CONTAMINATION RISK SCORING FOR BATCH ANALYZERS
 # =============================================================================
-@dataclass
-class CrosscontaminationRiskScoringForBatchAnalyzersEngineResult:
-    feature_name: str = "Cross-Contamination Risk Scoring for Batch Analyzers"
-    status: str = "OPTIMAL"
-    score: float = 0.0
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    alerts: List[str] = field(default_factory=list)
-    recommendations: List[str] = field(default_factory=list)
-    timestamp: str = field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc).isoformat())
+class CrosscontaminationRiskScoringForBatchAnalyzersEngine(ThresholdEngine):
+    """Score each specimen for carryover risk based on rack position and analyte susceptibility."""
+    feature_name = "Cross-Contamination Risk Scoring for Batch Analyzers"
 
-class CrosscontaminationRiskScoringForBatchAnalyzersEngine:
-    """
-    Cross-Contamination Risk Scoring for Batch Analyzers: **Goal:** Score each specimen for carryover risk based on rack position and analyte susceptibility.
-    """
-    def __init__(self, threshold: float = 1.0, config: Optional[Dict[str, Any]] = None):
-        self.threshold = threshold
-        self.config = config or {}
-        self.history: List[CrosscontaminationRiskScoringForBatchAnalyzersEngineResult] = []
+CrosscontaminationRiskScoringForBatchAnalyzersEngineResult = EnrichmentResult
 
-    def evaluate(self, primary_value: float, secondary_value: float = 0.0, **kwargs) -> CrosscontaminationRiskScoringForBatchAnalyzersEngineResult:
-        alerts = []
-        recs = []
-        status = "OPTIMAL"
-        score = round(float(primary_value), 3)
-
-        if primary_value > self.threshold * 2:
-            status = "CRITICAL_ALERT"
-            alerts.append(f"Cross-Contamination Risk Scoring for Batch Analyzers: Primary value {primary_value:.2f} breached critical threshold ({self.threshold * 2:.2f})")
-            recs.append("Initiate immediate protocol review and escalate to attending lead.")
-        elif primary_value > self.threshold:
-            status = "WARNING"
-            alerts.append(f"Cross-Contamination Risk Scoring for Batch Analyzers: Value {primary_value:.2f} exceeds baseline threshold ({self.threshold:.2f})")
-            recs.append("Increase monitoring frequency and perform secondary verification.")
-        else:
-            recs.append("Parameters nominal under standard operating bounds.")
-
-        res = CrosscontaminationRiskScoringForBatchAnalyzersEngineResult(
-            feature_name="Cross-Contamination Risk Scoring for Batch Analyzers",
-            status=status,
-            score=score,
-            metrics={"primary": primary_value, "secondary": secondary_value, **kwargs},
-            alerts=alerts,
-            recommendations=recs
-        )
-        self.history.append(res)
-        return res
 
 # =============================================================================
-# 6. POST /API/CONTAMINATION-SCORE ACCEPTS SPECIMEN BATCH DETAILS AND RETURNS PER-SPECIMEN RISK SCORES
+# 6. POST /API/CONTAMINATION-SCORE
 # =============================================================================
-@dataclass
-class PostApicontaminationscoreAcceptsSpecimenBatchDetailsAndReturnsPerspecimenRiskScoresEngineResult:
-    feature_name: str = "POST /api/contamination-score accepts specimen batch details and returns per-specimen risk scores"
-    status: str = "OPTIMAL"
-    score: float = 0.0
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    alerts: List[str] = field(default_factory=list)
-    recommendations: List[str] = field(default_factory=list)
-    timestamp: str = field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc).isoformat())
+class PostApicontaminationscoreAcceptsSpecimenBatchDetailsAndReturnsPerspecimenRiskScoresEngine(ThresholdEngine):
+    """POST /api/contamination-score accepts specimen batch details and returns per-specimen risk scores."""
+    feature_name = "POST /api/contamination-score accepts specimen batch details and returns per-specimen risk scores"
 
-class PostApicontaminationscoreAcceptsSpecimenBatchDetailsAndReturnsPerspecimenRiskScoresEngine:
-    """
-    POST /api/contamination-score accepts specimen batch details and returns per-specimen risk scores: ---
-    """
-    def __init__(self, threshold: float = 1.0, config: Optional[Dict[str, Any]] = None):
-        self.threshold = threshold
-        self.config = config or {}
-        self.history: List[PostApicontaminationscoreAcceptsSpecimenBatchDetailsAndReturnsPerspecimenRiskScoresEngineResult] = []
+PostApicontaminationscoreAcceptsSpecimenBatchDetailsAndReturnsPerspecimenRiskScoresEngineResult = EnrichmentResult
 
-    def evaluate(self, primary_value: float, secondary_value: float = 0.0, **kwargs) -> PostApicontaminationscoreAcceptsSpecimenBatchDetailsAndReturnsPerspecimenRiskScoresEngineResult:
-        alerts = []
-        recs = []
-        status = "OPTIMAL"
-        score = round(float(primary_value), 3)
-
-        if primary_value > self.threshold * 2:
-            status = "CRITICAL_ALERT"
-            alerts.append(f"POST /api/contamination-score accepts specimen batch details and returns per-specimen risk scores: Primary value {primary_value:.2f} breached critical threshold ({self.threshold * 2:.2f})")
-            recs.append("Initiate immediate protocol review and escalate to attending lead.")
-        elif primary_value > self.threshold:
-            status = "WARNING"
-            alerts.append(f"POST /api/contamination-score accepts specimen batch details and returns per-specimen risk scores: Value {primary_value:.2f} exceeds baseline threshold ({self.threshold:.2f})")
-            recs.append("Increase monitoring frequency and perform secondary verification.")
-        else:
-            recs.append("Parameters nominal under standard operating bounds.")
-
-        res = PostApicontaminationscoreAcceptsSpecimenBatchDetailsAndReturnsPerspecimenRiskScoresEngineResult(
-            feature_name="POST /api/contamination-score accepts specimen batch details and returns per-specimen risk scores",
-            status=status,
-            score=score,
-            metrics={"primary": primary_value, "secondary": secondary_value, **kwargs},
-            alerts=alerts,
-            recommendations=recs
-        )
-        self.history.append(res)
-        return res
 
 # =============================================================================
 # 7. PREDICTIVE EQUIPMENT MAINTENANCE SCHEDULING
 # =============================================================================
-@dataclass
-class PredictiveEquipmentMaintenanceSchedulingEngineResult:
-    feature_name: str = "Predictive Equipment Maintenance Scheduling"
-    status: str = "OPTIMAL"
-    score: float = 0.0
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    alerts: List[str] = field(default_factory=list)
-    recommendations: List[str] = field(default_factory=list)
-    timestamp: str = field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc).isoformat())
+class PredictiveEquipmentMaintenanceSchedulingEngine(ThresholdEngine):
+    """Predict maintenance needs from QC drift patterns before failures occur."""
+    feature_name = "Predictive Equipment Maintenance Scheduling"
 
-class PredictiveEquipmentMaintenanceSchedulingEngine:
-    """
-    Predictive Equipment Maintenance Scheduling: **Goal:** Predict maintenance needs from QC drift patterns before failures occur.
-    """
-    def __init__(self, threshold: float = 1.0, config: Optional[Dict[str, Any]] = None):
-        self.threshold = threshold
-        self.config = config or {}
-        self.history: List[PredictiveEquipmentMaintenanceSchedulingEngineResult] = []
+PredictiveEquipmentMaintenanceSchedulingEngineResult = EnrichmentResult
 
-    def evaluate(self, primary_value: float, secondary_value: float = 0.0, **kwargs) -> PredictiveEquipmentMaintenanceSchedulingEngineResult:
-        alerts = []
-        recs = []
-        status = "OPTIMAL"
-        score = round(float(primary_value), 3)
-
-        if primary_value > self.threshold * 2:
-            status = "CRITICAL_ALERT"
-            alerts.append(f"Predictive Equipment Maintenance Scheduling: Primary value {primary_value:.2f} breached critical threshold ({self.threshold * 2:.2f})")
-            recs.append("Initiate immediate protocol review and escalate to attending lead.")
-        elif primary_value > self.threshold:
-            status = "WARNING"
-            alerts.append(f"Predictive Equipment Maintenance Scheduling: Value {primary_value:.2f} exceeds baseline threshold ({self.threshold:.2f})")
-            recs.append("Increase monitoring frequency and perform secondary verification.")
-        else:
-            recs.append("Parameters nominal under standard operating bounds.")
-
-        res = PredictiveEquipmentMaintenanceSchedulingEngineResult(
-            feature_name="Predictive Equipment Maintenance Scheduling",
-            status=status,
-            score=score,
-            metrics={"primary": primary_value, "secondary": secondary_value, **kwargs},
-            alerts=alerts,
-            recommendations=recs
-        )
-        self.history.append(res)
-        return res
 
 # =============================================================================
-# 8. GET /API/MAINTENANCE-FORECAST RETURNS PER-ANALYZER PREDICTED MAINTENANCE DATES AND CONFIDENCE LEVELS
+# 8. GET /API/MAINTENANCE-FORECAST
 # =============================================================================
-@dataclass
-class GetApimaintenanceforecastReturnsPeranalyzerPredictedMaintenanceDatesAndConfidenceLevelsEngineResult:
-    feature_name: str = "GET /api/maintenance-forecast returns per-analyzer predicted maintenance dates and confidence levels"
-    status: str = "OPTIMAL"
-    score: float = 0.0
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    alerts: List[str] = field(default_factory=list)
-    recommendations: List[str] = field(default_factory=list)
-    timestamp: str = field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc).isoformat())
+class GetApimaintenanceforecastReturnsPeranalyzerPredictedMaintenanceDatesAndConfidenceLevelsEngine(ThresholdEngine):
+    """GET /api/maintenance-forecast returns per-analyzer predicted maintenance dates and confidence levels."""
+    feature_name = "GET /api/maintenance-forecast returns per-analyzer predicted maintenance dates and confidence levels"
 
-class GetApimaintenanceforecastReturnsPeranalyzerPredictedMaintenanceDatesAndConfidenceLevelsEngine:
-    """
-    GET /api/maintenance-forecast returns per-analyzer predicted maintenance dates and confidence levels: ---
-    """
-    def __init__(self, threshold: float = 1.0, config: Optional[Dict[str, Any]] = None):
-        self.threshold = threshold
-        self.config = config or {}
-        self.history: List[GetApimaintenanceforecastReturnsPeranalyzerPredictedMaintenanceDatesAndConfidenceLevelsEngineResult] = []
-
-    def evaluate(self, primary_value: float, secondary_value: float = 0.0, **kwargs) -> GetApimaintenanceforecastReturnsPeranalyzerPredictedMaintenanceDatesAndConfidenceLevelsEngineResult:
-        alerts = []
-        recs = []
-        status = "OPTIMAL"
-        score = round(float(primary_value), 3)
-
-        if primary_value > self.threshold * 2:
-            status = "CRITICAL_ALERT"
-            alerts.append(f"GET /api/maintenance-forecast returns per-analyzer predicted maintenance dates and confidence levels: Primary value {primary_value:.2f} breached critical threshold ({self.threshold * 2:.2f})")
-            recs.append("Initiate immediate protocol review and escalate to attending lead.")
-        elif primary_value > self.threshold:
-            status = "WARNING"
-            alerts.append(f"GET /api/maintenance-forecast returns per-analyzer predicted maintenance dates and confidence levels: Value {primary_value:.2f} exceeds baseline threshold ({self.threshold:.2f})")
-            recs.append("Increase monitoring frequency and perform secondary verification.")
-        else:
-            recs.append("Parameters nominal under standard operating bounds.")
-
-        res = GetApimaintenanceforecastReturnsPeranalyzerPredictedMaintenanceDatesAndConfidenceLevelsEngineResult(
-            feature_name="GET /api/maintenance-forecast returns per-analyzer predicted maintenance dates and confidence levels",
-            status=status,
-            score=score,
-            metrics={"primary": primary_value, "secondary": secondary_value, **kwargs},
-            alerts=alerts,
-            recommendations=recs
-        )
-        self.history.append(res)
-        return res
+GetApimaintenanceforecastReturnsPeranalyzerPredictedMaintenanceDatesAndConfidenceLevelsEngineResult = EnrichmentResult
 
 # =============================================================================
 # COMPOSITE ENRICHMENT SUITE

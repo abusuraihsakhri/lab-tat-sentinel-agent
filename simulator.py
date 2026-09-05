@@ -1,6 +1,7 @@
 """
 Distributed Component High-Throughput Traffic & Stress Testing Simulator for Lab Tat Sentinel Agent.
 """
+import argparse
 import time
 import random
 import sys
@@ -8,8 +9,14 @@ from agents.models import SystemTaskPayload
 from agents.supervisor import SystemSupervisor
 from agents.base import PHIGuard, SecurityException, AuditLogger
 
-def run_simulation(iterations: int = 100):
-    print(f"Starting Distributed Component Simulation on Lab Tat Sentinel Agent ({iterations} tasks)...")
+def run_simulation(iterations: int = 100, concurrency: int = 1):
+    """Run high-throughput simulation with optional concurrency.
+
+    Args:
+        iterations: Number of tasks to simulate.
+        concurrency: Number of concurrent workers (used for reporting; sequential execution).
+    """
+    print(f"Starting Distributed Component Simulation on Lab Tat Sentinel Agent ({iterations} tasks, concurrency={concurrency})...")
     supervisor = SystemSupervisor(model_provider="mock")
     start_time = time.time()
     nominal_count = 0
@@ -53,6 +60,7 @@ def run_simulation(iterations: int = 100):
     print(f"  SIMULATION SUMMARY FOR LAB TAT SENTINEL AGENT")
     print("=" * 70)
     print(f"  Total Tasks Processed:     {iterations}")
+    print(f"  Concurrency Level:         {concurrency}")
     print(f"  Elapsed Time:              {elapsed:.3f} seconds ({iterations/max(0.001, elapsed):.1f} tasks/sec)")
     print(f"  Routine Outcomes:          {nominal_count} ({nominal_count/iterations*100:.1f}%)")
     print(f"  Elevated Risk Outcomes:    {elevated_count} ({elevated_count/iterations*100:.1f}%)")
@@ -62,6 +70,12 @@ def run_simulation(iterations: int = 100):
     print(f"  HMAC Cryptographic Check:  {AuditLogger.verify_integrity()}")
     print("=" * 70)
 
+def main():
+    parser = argparse.ArgumentParser(prog="simulator", description="Lab Tat Sentinel Agent Stress Testing Simulator")
+    parser.add_argument("--tasks", type=int, default=100, help="Number of tasks to simulate (default: 100)")
+    parser.add_argument("--concurrency", type=int, default=1, help="Concurrency level for reporting (default: 1)")
+    args = parser.parse_args()
+    run_simulation(iterations=args.tasks, concurrency=args.concurrency)
+
 if __name__ == "__main__":
-    n = int(sys.argv[1]) if len(sys.argv) > 1 else 100
-    run_simulation(n)
+    main()

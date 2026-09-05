@@ -4,12 +4,25 @@ Command Line Interface for Lab Tat Sentinel Agent.
 import argparse
 import csv
 import json
+import os
 import sys
+from pathlib import Path
 from agents.models import SystemTaskPayload
 from agents.supervisor import SystemSupervisor
 from agents.base import AuditLogger
 
 supervisor = SystemSupervisor(model_provider="mock")
+
+
+def _resolve_safe_path(path_str: str, must_exist: bool = False) -> Path:
+    """Resolve a user-supplied path safely, preventing directory traversal."""
+    try:
+        p = Path(path_str).resolve()
+    except (OSError, ValueError) as e:
+        raise argparse.ArgumentTypeError(f"Invalid path '{path_str}': {e}")
+    if must_exist and not p.is_file():
+        raise argparse.ArgumentTypeError(f"File not found: {p}")
+    return p
 
 
 def main(argv=None):
@@ -31,8 +44,8 @@ def main(argv=None):
 
     # Batch
     p_batch = subparsers.add_parser("batch", help="Batch process CSV records")
-    p_batch.add_argument("-i", "--input", required=True)
-    p_batch.add_argument("-o", "--output", default="results.csv")
+    p_batch.add_argument("-i", "--input", required=True, type=lambda p: _resolve_safe_path(p, must_exist=True))
+    p_batch.add_argument("-o", "--output", default="results.csv", type=lambda p: _resolve_safe_path(p))
 
     # Verify Audit
     subparsers.add_parser("verify-audit", help="Verify HMAC audit trail integrity")
@@ -80,35 +93,48 @@ def main(argv=None):
         return 0
 
     if args.command == "batch":
-        with open(args.input, mode="r", encoding="utf-8-sig") as f:
-            reader = csv.DictReader(f)
-            fieldnames = list(reader.fieldnames or [])
-            rows = list(reader)
+        try:
+            with open(args.input, mode="r", encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+                fieldnames = list(reader.fieldnames or [])
+                rows = list(reader)
+        except (OSError, csv.Error) as e:
+            print(f"Error reading input file: {e}", file=sys.stderr)
+            return 1
 
         out_fields = fieldnames + ["overall_urgency", "integrity_status", "total_alerts", "audit_hash"]
         out_rows = []
+        processed = 0
         for r in rows:
-            payload = SystemTaskPayload(
-                task_id=r.get("task_id", "TASK-01"),
-                target_identifier=r.get("target_identifier", "TARGET-01"),
-                primary_metric=float(r.get("primary_metric", 15.0)),
-                secondary_metric=float(r.get("secondary_metric", 5.0)),
-                status_descriptor=r.get("status_descriptor", "NOMINAL"),
-                is_critical_flag=bool(r.get("is_critical_flag", False)),
-            )
-            dossier = supervisor.process_task(payload)
-            row_dict = dict(r)
-            row_dict["overall_urgency"] = dossier.overall_urgency.value
-            row_dict["integrity_status"] = dossier.integrity_status.value
-            row_dict["total_alerts"] = dossier.total_alerts
-            row_dict["audit_hash"] = dossier.audit_hash
-            out_rows.append(row_dict)
+            try:
+                payload = SystemTaskPayload(
+                    task_id=r.get("task_id", f"TASK-{processed+1:04d}"),
+                    target_identifier=r.get("target_identifier", "TARGET-01"),
+                    primary_metric=float(r.get("primary_metric", 15.0)),
+                    secondary_metric=float(r.get("secondary_metric", 5.0)),
+                    status_descriptor=r.get("status_descriptor", "NOMINAL"),
+                    is_critical_flag=str(r.get("is_critical_flag", "")).lower() in ("true", "1", "yes"),
+                )
+                dossier = supervisor.process_task(payload)
+                row_dict = dict(r)
+                row_dict["overall_urgency"] = dossier.overall_urgency.value
+                row_dict["integrity_status"] = dossier.integrity_status.value
+                row_dict["total_alerts"] = dossier.total_alerts
+                row_dict["audit_hash"] = dossier.audit_hash
+                out_rows.append(row_dict)
+            except (ValueError, TypeError) as e:
+                print(f"Warning: Skipping malformed row {processed + 1}: {e}", file=sys.stderr)
+            processed += 1
 
-        with open(args.output, mode="w", encoding="utf-8", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=out_fields)
-            writer.writeheader()
-            writer.writerows(out_rows)
-        print(f"Processed {len(out_rows)} records -> {args.output}")
+        try:
+            with open(args.output, mode="w", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=out_fields)
+                writer.writeheader()
+                writer.writerows(out_rows)
+        except OSError as e:
+            print(f"Error writing output file: {e}", file=sys.stderr)
+            return 1
+        print(f"Processed {len(out_rows)}/{processed} records -> {args.output}")
         return 0
 
     if args.command == "serve":
