@@ -6,6 +6,7 @@ import os
 import re
 import json
 import time
+import threading
 import hmac
 import hashlib
 from typing import Dict, Any, List, Optional
@@ -68,53 +69,57 @@ class AuditTrail:
             resolved_key = os.urandom(32).hex()
         self.secret_key = resolved_key.encode("utf-8")
         self.logs: List[Dict[str, Any]] = []
+        self._lock = threading.RLock()
 
     def log(self, actor: str, actor_tier: str, event_type: str, details: Dict[str, Any]) -> Dict[str, Any]:
-        payload_str = json.dumps(details, sort_keys=True, allow_nan=False)
-        assert_no_phi(payload_str)
-        payload_hash = hashlib.sha256(payload_str.encode("utf-8")).hexdigest()
-        audit_id = f"AUDIT-{int(time.time()*1000)}-{len(self.logs)+1}"
-        ts = datetime.now(timezone.utc).isoformat()
-        prev_hash = self.logs[-1]["current_hash"] if self.logs else "GENESIS_BLOCK_0000000000000000"
-        sign_string = f"{audit_id}|{ts}|{actor}|{actor_tier}|{event_type}|{payload_hash}|{prev_hash}"
-        signature = hmac.new(self.secret_key, sign_string.encode("utf-8"), hashlib.sha256).hexdigest()
-        entry = {
-            "audit_id": audit_id,
-            "timestamp": ts,
-            "actor": actor,
-            "actor_tier": actor_tier,
-            "event_type": event_type,
-            "payload_hash": payload_hash,
-            "prev_hash": prev_hash,
-            "current_hash": signature,
-        }
-        self.logs.append(entry)
-        return entry
+        with self._lock:
+            payload_str = json.dumps(details, sort_keys=True, allow_nan=False)
+            assert_no_phi(payload_str)
+            payload_hash = hashlib.sha256(payload_str.encode("utf-8")).hexdigest()
+            audit_id = f"AUDIT-{int(time.time()*1000)}-{len(self.logs)+1}"
+            ts = datetime.now(timezone.utc).isoformat()
+            prev_hash = self.logs[-1]["current_hash"] if self.logs else "GENESIS_BLOCK_0000000000000000"
+            sign_string = f"{audit_id}|{ts}|{actor}|{actor_tier}|{event_type}|{payload_hash}|{prev_hash}"
+            signature = hmac.new(self.secret_key, sign_string.encode("utf-8"), hashlib.sha256).hexdigest()
+            entry = {
+                "audit_id": audit_id,
+                "timestamp": ts,
+                "actor": actor,
+                "actor_tier": actor_tier,
+                "event_type": event_type,
+                "payload_hash": payload_hash,
+                "prev_hash": prev_hash,
+                "current_hash": signature,
+            }
+            self.logs.append(entry)
+            return entry
 
     def verify_integrity(self) -> bool:
-        """Verify every HMAC and predecessor link, not just the hash chain."""
-        previous = "GENESIS_BLOCK_0000000000000000"
-        for entry in self.logs:
-            try:
-                if not hmac.compare_digest(entry["prev_hash"], previous):
+        with self._lock:
+            """Verify every HMAC and predecessor link, not just the hash chain."""
+            previous = "GENESIS_BLOCK_0000000000000000"
+            for entry in self.logs:
+                try:
+                    if not hmac.compare_digest(entry["prev_hash"], previous):
+                        return False
+                    message = "|".join(str(entry[key]) for key in (
+                        "audit_id", "timestamp", "actor", "actor_tier",
+                        "event_type", "payload_hash", "prev_hash",
+                    ))
+                    expected = hmac.new(
+                        self.secret_key, message.encode("utf-8"), hashlib.sha256
+                    ).hexdigest()
+                    if not hmac.compare_digest(expected, entry["current_hash"]):
+                        return False
+                    previous = entry["current_hash"]
+                except (KeyError, TypeError, ValueError):
                     return False
-                message = "|".join(str(entry[key]) for key in (
-                    "audit_id", "timestamp", "actor", "actor_tier",
-                    "event_type", "payload_hash", "prev_hash",
-                ))
-                expected = hmac.new(
-                    self.secret_key, message.encode("utf-8"), hashlib.sha256
-                ).hexdigest()
-                if not hmac.compare_digest(expected, entry["current_hash"]):
-                    return False
-                previous = entry["current_hash"]
-            except (KeyError, TypeError, ValueError):
-                return False
-        return True
+            return True
 
     def get_trail(self) -> List[Dict[str, Any]]:
-        """Return a snapshot so callers cannot alter the audit chain."""
-        return [entry.copy() for entry in self.logs]
+        with self._lock:
+            """Return a snapshot so callers cannot alter the audit chain."""
+            return [entry.copy() for entry in self.logs]
 
 
 GLOBAL_AUDIT = AuditTrail()
