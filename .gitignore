@@ -3,7 +3,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.py,
+*.py[cod]
 *.so
 
 # Distribution / packaging

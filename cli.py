@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from agents.models import SystemTaskPayload
 from agents.supervisor import SystemSupervisor
-from agents.base import AuditLogger
+from agents.base import AuditLogger, SecurityException
 
 supervisor = SystemSupervisor(model_provider="mock")
 
@@ -102,18 +102,23 @@ def main(argv=None):
             print(f"Error reading input file: {e}", file=sys.stderr)
             return 1
 
-        out_fields = fieldnames + ["overall_urgency", "integrity_status", "total_alerts", "audit_hash"]
+        if not fieldnames:
+            print("Error: CSV must contain a header row.", file=sys.stderr)
+            return 1
+        out_fields = list(dict.fromkeys(
+            fieldnames + ["overall_urgency", "integrity_status", "total_alerts", "audit_hash"]
+        ))
         out_rows = []
         processed = 0
         for r in rows:
             try:
                 payload = SystemTaskPayload(
-                    task_id=r.get("task_id", f"TASK-{processed+1:04d}"),
-                    target_identifier=r.get("target_identifier", "TARGET-01"),
-                    primary_metric=float(r.get("primary_metric", 15.0)),
-                    secondary_metric=float(r.get("secondary_metric", 5.0)),
-                    status_descriptor=r.get("status_descriptor", "NOMINAL"),
-                    is_critical_flag=str(r.get("is_critical_flag", "")).lower() in ("true", "1", "yes"),
+                    task_id=r.get("task_id") or r.get("case_id") or f"TASK-{processed+1:04d}",
+                    target_identifier=r.get("target_identifier") or r.get("patient_synthetic_id") or "TARGET-01",
+                    primary_metric=float(r.get("primary_metric") or r.get("metric_primary") or 15.0),
+                    secondary_metric=float(r.get("secondary_metric") or r.get("metric_secondary") or 5.0),
+                    status_descriptor=r.get("status_descriptor") or r.get("status_flag") or r.get("status_text") or "NOMINAL",
+                    is_critical_flag=str(r.get("is_critical_flag") or r.get("is_stat") or r.get("critical_flag") or "").strip().lower() in ("true", "1", "yes"),
                 )
                 dossier = supervisor.process_task(payload)
                 row_dict = dict(r)
@@ -122,8 +127,8 @@ def main(argv=None):
                 row_dict["total_alerts"] = dossier.total_alerts
                 row_dict["audit_hash"] = dossier.audit_hash
                 out_rows.append(row_dict)
-            except (ValueError, TypeError) as e:
-                print(f"Warning: Skipping malformed row {processed + 1}: {e}", file=sys.stderr)
+            except (ValueError, TypeError, SecurityException):
+                print(f"Warning: Skipping invalid or sensitive row {processed + 1}.", file=sys.stderr)
             processed += 1
 
         try:
