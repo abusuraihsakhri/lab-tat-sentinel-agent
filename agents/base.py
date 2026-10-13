@@ -62,7 +62,7 @@ class AuditTrail:
             import warnings
             warnings.warn(
                 "AUDIT_SECRET_KEY not set. Generating an ephemeral key. "
-                "Set AUDIT_SECRET_KEY env var for persistent audit integrity across restarts.",
+                "Set AUDIT_SECRET_KEY for a stable signing key; logs still reset across restarts.",
                 RuntimeWarning,
                 stacklevel=2,
             )
@@ -95,8 +95,8 @@ class AuditTrail:
             return entry
 
     def verify_integrity(self) -> bool:
+        """Verify every HMAC and predecessor link, not just the hash chain."""
         with self._lock:
-            """Verify every HMAC and predecessor link, not just the hash chain."""
             previous = "GENESIS_BLOCK_0000000000000000"
             for entry in self.logs:
                 try:
@@ -117,8 +117,8 @@ class AuditTrail:
             return True
 
     def get_trail(self) -> List[Dict[str, Any]]:
+        """Return a snapshot so callers cannot alter the audit chain."""
         with self._lock:
-            """Return a snapshot so callers cannot alter the audit chain."""
             return [entry.copy() for entry in self.logs]
 
 
