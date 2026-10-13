@@ -1,122 +1,86 @@
-# Lab Tat Sentinel Agent
+# Lab TAT Sentinel Agent
 
-> **Domain:** Clinical Decision Support & Biomedical Computing  
-> **Reference Guidelines & Standards:** `Standard Clinical Formulations & ISO/IEC Quality Frameworks`
+A Python command-line tool, FastAPI service, and browser-local demonstration for applying **illustrative, rule-based alerts** to synthetic laboratory operations tasks. The present implementation does **not** calculate specimen turnaround time from LIS event timestamps, predict delays, or provide validated clinical decision support.
 
-<div align="center">
+## Browser demonstration
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg?logo=fastapi&logoColor=white)
-![Audit Trail](https://img.shields.io/badge/Audit-HMAC--SHA256_Tamper--Evident-brightgreen.svg)
-![Zero-PHI Guard](https://img.shields.io/badge/Guard-Zero--PHI_Outbound-blue.svg)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)
+The standalone interface in [`web/`](web/) evaluates synthetic task inputs using JavaScript rules corresponding to the three workers in `agents/workers.py`. It works without a Python runtime or backend and displays its execution mode and threshold values. Results can be exported as JSON.
 
-</div>
+To run locally:
 
----
-
-## 📖 What It Does
-
-**Lab Tat Sentinel Agent** is an advanced analytical and computational platform implementing LIS Specimen Turnaround Time & Bottleneck Forecaster.
-
----
-
-## ⚙️ Key Capabilities & Algorithmic Modules
-
-### 🔬 Core Algorithmic & Evaluation Engines
-
-- **`Severity`** — dedicated module for severity evaluation and state verification.
-- **`DomainKnowledgeRegistry`**: Enterprise domain rules, guideline matrices, and evidence benchmarks.
-- **`AgentAlert`** — dedicated module for agent alert evaluation and state verification.
-- **`QueueBottleneckForecasterAgent`**: Specialized Sub-Agent 1 for lab-tat-sentinel-agent
-- **`SLABreachPredictorAgent`**: Specialized Sub-Agent 2 for lab-tat-sentinel-agent
-- **`AnalyzerWorkloadBalancerAgent`**: Specialized Sub-Agent 3 for lab-tat-sentinel-agent
-
----
-
-## 💻 CLI Quickstart & Usage
-
-### 1. Single Task Evaluation (Audit)
 ```bash
-python cli.py audit --task-id TASK-001 --target SPECIMEN-01 --primary 28.5 --secondary 14.2 --critical --status DISCORDANT
+python -m http.server 8001 --directory web
 ```
 
-### 2. Batch Process CSV Records
+Open `http://localhost:8001`. Do not use actual patient identifiers. The browser demo holds inputs/results only in page memory and makes no application API requests. It does not produce an HMAC signature or persist an audit log.
+
+A GitHub Pages deployment workflow is included in `.github/workflows/pages.yml`; a live Pages URL should only be cited after GitHub Pages is enabled and deployment is verified.
+
+## Python installation
+
+Requires Python 3.10 or newer:
+
 ```bash
+python -m pip install -e ".[api]"
+```
+
+Run the primary CLI:
+
+```bash
+lab-tat-sentinel-engine audit --task-id TASK-001 --target SPECIMEN-01 --primary 28.5 --secondary 14.2 --critical --status DISCORDANT
+lab-tat-sentinel-engine batch -i sample.csv -o results.csv
+lab-tat-sentinel-engine chat "What is the system status?"
+lab-tat-sentinel-engine verify-audit
+```
+
+`python cli.py` offers the same commands. The batch reader accepts either `primary_metric` / `secondary_metric` or the sample file's legacy `metric_primary` / `metric_secondary` names; it also accepts `is_critical_flag` or `is_stat`. Malformed rows are skipped with a warning; the output reports processed counts.
+
+## API and Docker
+
+Run the API bound to localhost:
+
+```bash
+lab-tat-sentinel-engine serve --host 127.0.0.1 --port 8000
+```
+
+Implemented endpoints: `GET /health`, `GET /metrics` (Prometheus text), `POST /api/audit`, `POST /api/chat` (deterministic mock), and `GET /api/audit/logs`. The API is **unauthenticated** and must not be exposed to untrusted networks without appropriate access controls. Neither the mock chat response nor the alert thresholds constitute clinical verification.
+
+For container use, configure an independent secret before starting Docker Compose, for example:
+
+```bash
+export AUDIT_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+docker compose up --build
+```
+
+If an existing deployment used the formerly committed demonstration signing key, replace it. The HMAC audit chain resides **only in process memory**; setting a secret does not persist logs across restarts. HMACs are verified for each entry, but there is no external append-only storage or independent anchoring.
+
+## Rules and limitations
+
+The primary `agents/` implementation contains three deterministic workers:
+
+| Rule | Trigger | Result |
+| --- | --- | --- |
+| Primary metric threshold | `primary_metric > 25` | Elevated alert |
+| Secondary metric / priority | `secondary_metric > 12` or `is_critical_flag` | Elevated alert, or critical when explicitly flagged |
+| Descriptor keyword | Includes `DISCORDANT`, `ANOMALY`, `MUTANT`, `VIOLATION`, `FAIL`, or `REJECT` | Elevated alert |
+
+The thresholds and keywords are demonstration constants, **not** validated CAP/CLSI limits or institutional turnaround-time service-level agreements. The repository also retains historical `lab_tat_sentinel.py`, `lab_tat_sentinel_agent/`, and `enrichment.py` implementations for compatibility; these use different rule schemas and some enrichment classes are placeholders rather than implemented forecasting features.
+
+## Privacy and security
+
+Use synthetic data exclusively. A regex-based sensitive-identifier screen rejects some common patterns; it is **not comprehensive PHI detection, HIPAA Safe Harbor de-identification, or a replacement for a privacy review**. API requests, audit state, and dossiers are processed in server memory; the service does not implement authentication, persistence, access control, or a secured external LIS integration.
+
+## Tests
+
+```bash
+python -m pip install -e ".[api,test]"
+python -m pytest -q
+node --test tests/browser.test.mjs
 python cli.py batch -i sample.csv -o results.csv
 ```
 
-### 3. Supervisor Chat Query
-```bash
-python cli.py chat "What is the current system status?"
-```
+GitHub Actions runs the Python suite on 3.10–3.12 and the Node 22 rule tests. The static browser client uses native ES modules and modern browser APIs supported by current Chromium, Firefox, and Safari versions; cross-browser end-to-end testing is not part of the automated suite.
 
-### 4. Verify Audit Trail Integrity
-```bash
-python cli.py verify-audit
-```
+## License
 
-### 5. Launch FastAPI REST Server
-```bash
-python cli.py serve --host 127.0.0.1 --port 8000
-```
-
-### Audit Command Parameters
-
-| Parameter | Type | Default | Description |
-|:----------|:-----|:--------|:------------|
-| `--task-id` | str | `TASK-2026-001` | Unique task / case identifier |
-| `--target` | str | `KEY-TARGET-01` | Target specimen or entity identifier |
-| `--primary` | float | `28.5` | Primary metric measurement |
-| `--secondary` | float | `14.2` | Secondary metric measurement |
-| `--critical` | flag | `False` | Trigger emergency escalation |
-| `--status` | str | `DISCORDANT` | Status descriptor (e.g., NOMINAL, DISCORDANT, SUSPICIOUS) |
-
-### Batch CSV Input Schema
-
-| Field | Description | Requirement |
-|:------|:------------|:------------|
-| `task_id` | Unique task identifier | Optional (defaults to row index) |
-| `target_identifier` | Target specimen/entity | Optional |
-| `primary_metric` | Primary measurement value | Optional (default: 15.0) |
-| `secondary_metric` | Secondary measurement value | Optional (default: 5.0) |
-| `is_critical_flag` | Emergency escalation flag | Optional (default: false) |
-| `status_descriptor` | Status code or phenotype | Optional (default: NOMINAL) |
-
----
-
-## 🛡️ Security & Enterprise Architecture
-
-* **Zero-PHI Outbound Interceptor:** Active AST and regex inspection blocking SSNs, MRNs, phone numbers, and patient identifiers.
-* **Tamper-Evident HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs for every evaluation and state transition.
-* **Air-Gapped LLM Reasoning Adapter:** Agnostic integration for local Ollama instances (`llama3`, `mistral`), Claude 3.5 Sonnet, GPT-4o, and deterministic test mocks.
-* **Active Learning Bayesian Calibration:** Dynamic tracker updating worker reliability weights and monitoring Brier calibration drift.
-* **FastAPI & Prometheus Telemetry:** Exposes OpenAPI 3.1 REST endpoints and operational Prometheus metrics (`/metrics`).
-
----
-
-## 🧪 Testing & Verification
-
-Run the automated test suite:
-
-```bash
-pytest -v
-```
-
-Execute high-throughput batch simulation benchmarks:
-
-```bash
-python simulator.py --tasks 100 --concurrency 1
-```
-
-The simulator generates random task payloads across all urgency tiers, injects adversarial PHI test cases, and reports HMAC-SHA256 audit integrity verification.
-
----
-
-## 🐳 Container Deployment
-
-```bash
-docker build -t lab-tat-sentinel-agent .
-docker run -p 8000:8000 lab-tat-sentinel-agent
-```
+[MIT](LICENSE).
