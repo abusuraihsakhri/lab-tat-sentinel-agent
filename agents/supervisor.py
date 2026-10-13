@@ -2,9 +2,12 @@
 Supervisor Orchestrator & Operations Intelligence for Lab Tat Sentinel Agent.
 Domain: Clinical & Biomedical AI
 """
+import json
+import time
 import uuid
 from typing import Dict, Any, List, Optional
-from .base import AuditLogger, ActionExecutor, PHIGuard
+from .base import AuditLogger, ActionExecutor, PHIGuard, SecurityException
+from .metrics import GLOBAL_METRICS
 from .models import SystemTaskPayload, AgentAlert, ConsensusDossier, UrgencyLevel, SystemIntegrityStatus
 from .workers import InvariantQCWorker, SafetyEscalationWorker, ProtocolConformanceWorker
 from .llm_factory import LLMFactory
@@ -21,10 +24,17 @@ class SystemSupervisor:
         self.dossier_registry: Dict[str, ConsensusDossier] = {}
 
     def process_task(self, payload: SystemTaskPayload, actor: str = "SystemSupervisor") -> ConsensusDossier:
-        # Zero-PHI outbound validation
-        PHIGuard.assert_no_phi(payload.task_id)
-        PHIGuard.assert_no_phi(payload.target_identifier)
-        PHIGuard.assert_no_phi(payload.status_descriptor)
+        # Screen all free-text fields before further processing. Regex-based
+        # screening is defense in depth, not HIPAA de-identification.
+        try:
+            for value in (payload.task_id, payload.target_identifier,
+                          payload.status_descriptor, payload.timestamp,
+                          json.dumps(payload.attributes, ensure_ascii=False)):
+                PHIGuard.assert_no_phi(value)
+        except SecurityException:
+            GLOBAL_METRICS.record_phi_block()
+            raise
+        started = time.perf_counter()
 
         # Multi-worker evaluations
         all_alerts: List[AgentAlert] = []
@@ -71,6 +81,7 @@ class SystemSupervisor:
         )
 
         self.dossier_registry[dossier.dossier_id] = dossier
+        GLOBAL_METRICS.record_task(overall_urgency.value, time.perf_counter() - started)
         return dossier
 
     def query_supervisory_chat(self, query: str) -> str:
