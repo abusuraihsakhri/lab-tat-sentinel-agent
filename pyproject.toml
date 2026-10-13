@@ -1,27 +1,37 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "lab-tat-sentinel-engine"
-version = "2.0.0"
-description = "LabTAT Sentinel: Autonomous LIS Specimen Turnaround Time & Bottleneck Forecaster"
+version = "2.0.1"
+description = "Rule-based specimen operations alert prototype and audit tooling"
 readme = "README.md"
-authors = [{ name = "Dr. Abu Suraih Sakhri", email = "abusuraih@example.com" }]
-license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "Dr. Abu Suraih Sakhri" }]
+license = "MIT"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering :: Medical Science Apps.",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-requires-python = ">=3.9"
-dependencies = []
+dependencies = ["pydantic>=2.0,<3"]
+
+[project.optional-dependencies]
+api = ["fastapi>=0.110,<1", "uvicorn>=0.27,<1"]
+test = ["pytest>=8,<10", "httpx>=0.27,<1"]
 
 [project.scripts]
-lab-tat-sentinel-engine = "lab_tat_sentinel_agent.cli:main"
+lab-tat-sentinel-engine = "cli:main"
+lab-tat-sentinel-agent = "cli:main"
 
 [project.urls]
-Homepage = "https://github.com/abusuraihsakhri/lab-tat-sentinel-engine"
-Repository = "https://github.com/abusuraihsakhri/lab-tat-sentinel-engine.git"
+Homepage = "https://github.com/abusuraihsakhri/lab-tat-sentinel-agent"
+Repository = "https://github.com/abusuraihsakhri/lab-tat-sentinel-agent"
+
+[tool.setuptools]
+py-modules = ["cli", "lab_tat_sentinel", "enrichment", "simulator"]
+
+[tool.setuptools.packages.find]
+include = ["agents*", "lab_tat_sentinel_agent*"]
