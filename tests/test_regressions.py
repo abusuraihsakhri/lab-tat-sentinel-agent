@@ -77,3 +77,29 @@ def test_sample_csv_legacy_schema(tmp_path):
     assert len(results) == 3
     assert results[0]["overall_urgency"] == "CRITICAL_STAT_PANIC"
     assert results[1]["overall_urgency"] == "ROUTINE"
+
+
+def test_legacy_csv_false_does_not_trigger_critical():
+    from lab_tat_sentinel import SLABreachPredictorAgent
+    assert SLABreachPredictorAgent().evaluate({
+        "critical_flag": "False", "metric_secondary": "2.0"
+    }) == []
+
+
+def test_unimplemented_inference_providers_are_rejected():
+    import pytest
+    from agents.llm_factory import LLMFactory
+    with pytest.raises(ValueError, match="not implemented"):
+        LLMFactory.create("openai")
+
+
+def test_payload_attributes_screened_for_identifiers():
+    import pytest
+    from agents.base import SecurityException
+    from agents.supervisor import SystemSupervisor
+    payload = SystemTaskPayload(
+        task_id="SAFE-1", target_identifier="SYNTH-1",
+        primary_metric=10, attributes={"free_text": "MRN-1234567"}
+    )
+    with pytest.raises(SecurityException):
+        SystemSupervisor().process_task(payload)
