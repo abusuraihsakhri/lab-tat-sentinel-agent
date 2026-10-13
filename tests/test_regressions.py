@@ -103,3 +103,16 @@ def test_payload_attributes_screened_for_identifiers():
     )
     with pytest.raises(SecurityException):
         SystemSupervisor().process_task(payload)
+
+
+def test_parallel_audit_entries_keep_valid_chain():
+    from concurrent.futures import ThreadPoolExecutor
+    trail = AuditTrail(secret_key="parallel-unit-test")
+    with ThreadPoolExecutor(max_workers=12) as executor:
+        list(executor.map(
+            lambda i: trail.log("worker", "test", "EVALUATE", {"index": i}),
+            range(120),
+        ))
+    assert len(trail.get_trail()) == 120
+    assert len({entry["audit_id"] for entry in trail.get_trail()}) == 120
+    assert trail.verify_integrity()
