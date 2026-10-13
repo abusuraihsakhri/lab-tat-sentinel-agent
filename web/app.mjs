@@ -6,8 +6,10 @@ export function evaluateTask(input) {
     const taskId = String(input.task_id ?? "").trim();
     const target = String(input.target_identifier ?? "").trim();
     const status = String(input.status_descriptor ?? "NOMINAL").trim();
-    const primary = Number(input.primary_metric);
-    const secondary = Number(input.secondary_metric);
+    const primaryText = String(input.primary_metric ?? "").trim();
+    const secondaryText = String(input.secondary_metric ?? "").trim();
+    const primary = primaryText === "" ? NaN : Number(primaryText);
+    const secondary = secondaryText === "" ? NaN : Number(secondaryText);
     const critical = input.is_critical_flag === true;
 
     if (!taskId || !target) throw new Error("Task and target identifiers are required.");
@@ -121,7 +123,7 @@ if (typeof document !== "undefined") {
         a.href = url;
         a.download = "lab-tat-rule-result.json";
         a.click();
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
     });
 
     reset.addEventListener("click", () => {
