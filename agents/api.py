@@ -14,7 +14,7 @@ supervisor = SystemSupervisor(model_provider="mock")
 
 app = FastAPI(
     title="Lab Tat Sentinel Agent API",
-    description="Enterprise Distributed Component Platform (Clinical & Biomedical AI)",
+    description="Illustrative threshold-based specimen operations evaluation API; not validated for clinical decisions",
     version="3.0.0-ENTERPRISE",
 )
 
@@ -33,7 +33,7 @@ def security_violation_handler(request, exc):
 
 @app.get("/health")
 def health():
-    return {"status": "HEALTHY", "service": "lab-tat-sentinel-agent", "domain": "Clinical & Biomedical AI", "standard": "CAP / CLSI / ISO Standards", "version": "3.0.0-ENTERPRISE"}
+    return {"status": "HEALTHY", "service": "lab-tat-sentinel-agent", "domain": "Clinical & Biomedical AI", "standard": "Illustrative thresholds; not clinically validated", "version": "3.0.0-ENTERPRISE"}
 
 
 @app.get("/metrics", response_class=PlainTextResponse)
