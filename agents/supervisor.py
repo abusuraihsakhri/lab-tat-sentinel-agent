@@ -76,7 +76,7 @@ class SystemSupervisor:
             total_alerts=len(all_alerts),
             critical_alerts_count=crit_count,
             alerts=all_alerts,
-            consensus_summary=f"Multi-agent consensus completed with status [{overall_urgency.value}]. Total alerts: {len(all_alerts)}.",
+            consensus_summary=f"Three deterministic rule checks completed with status [{overall_urgency.value}]. Total alerts: {len(all_alerts)}.",
             audit_hash=audit_entry["current_hash"],
         )
 
@@ -86,5 +86,5 @@ class SystemSupervisor:
 
     def query_supervisory_chat(self, query: str) -> str:
         PHIGuard.assert_no_phi(query)
-        prompt = f"Supervisor inquiry for Lab Tat Sentinel Agent under CAP / CLSI / ISO Standards: {query}"
+        prompt = f"Supervisor inquiry for Lab Tat Sentinel Agent (illustrative rules only): {query}"
         return self.llm.invoke(prompt)
